@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Test Balanza T-Scale</title>
+<style>
+  body{font-family:system-ui,sans-serif;max-width:720px;margin:24px auto;padding:0 16px;background:#111;color:#eee}
+  h1{font-size:20px}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:12px 0}
+  button,select{padding:8px 14px;border-radius:8px;border:1px solid #444;background:#222;color:#eee;font-size:14px;cursor:pointer}
+  button.pri{background:#2563eb;border-color:#2563eb}
+  #peso{font-size:72px;font-weight:700;text-align:center;padding:24px;border-radius:12px;background:#000;border:2px solid #333;font-variant-numeric:tabular-nums}
+  #peso.ok{border-color:#22c55e;color:#22c55e}
+  #peso.inestable{border-color:#f59e0b;color:#f59e0b}
+  #estado{font-size:13px;opacity:.8}
+  textarea{width:100%;height:200px;background:#000;color:#9f9;border:1px solid #333;border-radius:8px;font-family:monospace;font-size:12px;box-sizing:border-box}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  td,th{padding:4px 8px;border-bottom:1px solid #333;text-align:left}
+</style>
+</head>
+<body>
+<h1>Test Balanza T-Scale (RS-232)</h1>
+<p id="estado">Desconectado. Usar Chrome o Edge en PC.</p>
+
+<div class="row">
+  <button class="pri" id="btnCon">Conectar balanza</button>
+  <button id="btnDes">Desconectar</button>
+  <label>Baudrate
+    <select id="baud">
+      <option>9600</option><option>4800</option><option>2400</option>
+      <option>19200</option><option>1200</option><option>38400</option><option>115200</option>
+    </select>
+  </label>
+  <button id="btnAuto">Autodetectar baudrate</button>
+  <button id="btnSim">Simular lectura</button>
+</div>
+
+<div id="peso">-- kg</div>
+
+<h3>Ultimas lecturas</h3>
+<table><thead><tr><th>Hora</th><th>Peso</th><th>Estable</th><th>Linea cruda</th></tr></thead><tbody id="hist"></tbody></table>
+
+<h3>Log crudo (copiar y mandar si algo no sale)</h3>
+<textarea id="log" readonly></textarea>
+<div class="row"><button id="btnCopy">Copiar log</button><button id="btnClear">Limpiar</button></div>
+
+<script>
+const $ = id => document.getElementById(id);
+let port, reader, keep = false, buf = '', flushTimer;
+const dec = new TextDecoder();
+
+function log(t){ const l=$('log'); l.value += new Date().toLocaleTimeString()+'  '+t+'\n'; l.scrollTop=l.scrollHeight; }
+
+async function conectar(){
+  if(!('serial' in navigator)){ alert('Este navegador no soporta Web Serial. Usa Chrome o Edge en PC.'); return; }
+  try{
+    if(!port) port = await navigator.serial.requestPort();
+    await port.open({baudRate:+$('baud').value, dataBits:8, stopBits:1, parity:'none'});
+    keep = true;
+    $('estado').textContent = 'Conectado a '+$('baud').value+' baud 8N1. Pon peso o presiona PRINT.';
+    log('Conectado a '+$('baud').value);
+    leer();
+  }catch(e){ log('Error al conectar: '+e.message); }
+}
+
+async function leer(){
+  while(port.readable && keep){
+    reader = port.readable.getReader();
+    try{
+      while(true){
+        const {value, done} = await reader.read();
+        if(done) break;
+        if(value) procesar(value);
+      }
+    }catch(e){ log('Error leyendo: '+e.message); }
+    finally{ reader.releaseLock(); }
+  }
+}
+
+async function desconectar(){
+  keep = false;
+  try{ await reader?.cancel(); }catch(e){}
+  await new Promise(r=>setTimeout(r,200));
+  try{ await port?.close(); }catch(e){}
+  $('estado').textContent = 'Desconectado.';
+  log('Desconectado');
+}
+
+function procesar(bytes){
+  buf += dec.decode(bytes, {stream:true});
+  const partes = buf.split(/\r\n|\n|\r/);
+  buf = partes.pop();
+  partes.forEach(l => { if(l.trim()) linea(l); });
+  clearTimeout(flushTimer);
+  flushTimer = setTimeout(()=>{ if(buf.trim()){ linea(buf); buf=''; } }, 300);
+}
+
+// Parser generico: busca el primer numero y la unidad. Ajustar cuando se vea el formato real.
+function linea(l){
+  log(JSON.stringify(l));
+  const m = l.match(/(-?\d+(?:[.,]\d+)?)\s*(kg|g|lb|oz)?/i);
+  if(!m) return;
+  const peso = parseFloat(m[1].replace(',','.'));
+  const unidad = (m[2]||'kg').toLowerCase();
+  const estable = !/(^|[^A-Z])US([^A-Z]|$)/.test(l.toUpperCase());
+  mostrar(peso, unidad, estable, l);
+}
+
+function mostrar(peso, unidad, estable, cruda){
+  const p = $('peso');
+  p.textContent = peso.toFixed(2)+' '+unidad;
+  p.className = estable ? 'ok' : 'inestable';
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td>${new Date().toLocaleTimeString()}</td><td>${peso.toFixed(2)} ${unidad}</td><td>${estable?'si':'no'}</td><td>${cruda.replace(/</g,'&lt;')}</td>`;
+  $('hist').prepend(tr);
+  while($('hist').children.length>10) $('hist').lastChild.remove();
+}
+
+// Autodetect: prueba cada baudrate unos segundos y se queda con el que llega texto legible
+async function probar(baud, ms){
+  await port.open({baudRate:baud, dataBits:8, stopBits:1, parity:'none'});
+  const r = port.readable.getReader();
+  const datos = [];
+  const t = setTimeout(()=>r.cancel(), ms);
+  try{
+    while(true){
+      const {value, done} = await r.read();
+      if(done) break;
+      if(value) datos.push(...value);
+    }
+  }catch(e){}
+  clearTimeout(t);
+  r.releaseLock();
+  await port.close();
+  return datos;
+}
+
+function esLegible(d){
+  if(d.length < 3) return false;
+  const imp = d.filter(b => (b>=32 && b<=126) || b===10 || b===13).length;
+  return imp/d.length >= 0.95 && d.some(b => b>=48 && b<=57);
+}
+
+async function autodetectar(){
+  if(!('serial' in navigator)){ alert('Usa Chrome o Edge en PC.'); return; }
+  try{
+    if(keep) await desconectar();
+    if(!port) port = await navigator.serial.requestPort();
+    const bauds = [9600, 4800, 2400, 19200, 1200, 38400, 115200];
+    $('estado').textContent = 'Autodetectando... presiona PRINT o pon peso varias veces (unos 35 seg).';
+    for(const b of bauds){
+      log('Probando '+b+' baud...');
+      const d = await probar(b, 5000);
+      if(esLegible(d)){
+        $('baud').value = b;
+        log('Detectado: '+b+' baud');
+        await conectar();
+        return;
+      }
+    }
+    $('estado').textContent = 'No se detecto nada. Revisa cable (null-modem) y modo de salida en menu SET.';
+    log('Autodetect sin resultado');
+  }catch(e){ log('Error autodetect: '+e.message); }
+}
+
+$('btnCon').onclick = conectar;
+$('btnAuto').onclick = autodetectar;
+$('btnDes').onclick = desconectar;
+$('btnSim').onclick = () => linea('ST,GS,  '+(Math.random()*50).toFixed(2)+' kg');
+$('btnCopy').onclick = () => { navigator.clipboard.writeText($('log').value); };
+$('btnClear').onclick = () => { $('log').value=''; };
+</script>
+</body>
+</html>
