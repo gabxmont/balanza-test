@@ -3,24 +3,195 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Test Balanza T-Scale</title>
+<title>Zipeado + Balanza T-Scale</title>
 <style>
-  body{font-family:system-ui,sans-serif;max-width:720px;margin:24px auto;padding:0 16px;background:#111;color:#eee}
-  h1{font-size:20px}
-  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:12px 0}
-  button,select{padding:8px 14px;border-radius:8px;border:1px solid #444;background:#222;color:#eee;font-size:14px;cursor:pointer}
-  button.pri{background:#2563eb;border-color:#2563eb}
-  #peso{font-size:72px;font-weight:700;text-align:center;padding:24px;border-radius:12px;background:#000;border:2px solid #333;font-variant-numeric:tabular-nums}
-  #peso.ok{border-color:#22c55e;color:#22c55e}
-  #peso.inestable{border-color:#f59e0b;color:#f59e0b}
+  :root{--bg:#111;--card:#1a1a1a;--line:#333;--txt:#eee;--mut:#9a9a9a;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;--pri:#2563eb}
+  *{box-sizing:border-box}
+  [hidden]{display:none!important}
+  body{font-family:system-ui,sans-serif;max-width:980px;margin:0 auto;padding:12px 16px 48px;background:var(--bg);color:var(--txt)}
+  h1{font-size:20px;margin:8px 0}
+  h3{margin:18px 0 8px;font-size:15px}
+  button,select,input{padding:8px 14px;border-radius:8px;border:1px solid #444;background:#222;color:var(--txt);font-size:14px}
+  button{cursor:pointer}
+  button.pri{background:var(--pri);border-color:var(--pri)}
+  button.ok{background:#15803d;border-color:#15803d}
+  button.bad{background:#7f1d1d;border-color:#991b1b}
+  button:disabled{opacity:.4;cursor:default}
+  input[type=number],input[type=text],input[type=search]{background:#000}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0}
+  .grow{flex:1;min-width:140px}
+  .mut{color:var(--mut);font-size:13px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:12px 0}
+  .grid2{display:grid;grid-template-columns:1fr;gap:12px}
+  @media(min-width:760px){.grid2{grid-template-columns:1fr 1fr}}
+
+  .tabs{display:flex;gap:6px;border-bottom:1px solid var(--line);margin-bottom:8px}
+  .tabs button{border:0;border-bottom:3px solid transparent;border-radius:0;background:none;padding:10px 14px;color:var(--mut)}
+  .tabs button.on{color:var(--txt);border-bottom-color:var(--pri)}
+
+  /* peso */
+  .peso{font-size:56px;font-weight:700;text-align:center;padding:16px;border-radius:12px;background:#000;border:2px solid #333;font-variant-numeric:tabular-nums}
+  .peso.ok{border-color:var(--ok);color:var(--ok)}
+  .peso.inestable{border-color:var(--warn);color:var(--warn)}
+  #peso{font-size:72px;padding:24px}
   #estado{font-size:13px;opacity:.8}
-  textarea{width:100%;height:200px;background:#000;color:#9f9;border:1px solid #333;border-radius:8px;font-family:monospace;font-size:12px;box-sizing:border-box}
+  .bar{height:10px;border-radius:6px;background:#000;border:1px solid #333;overflow:hidden}
+  .bar>i{display:block;height:100%;background:var(--ok);width:0}
+
+  /* tablas */
   table{width:100%;border-collapse:collapse;font-size:13px}
-  td,th{padding:4px 8px;border-bottom:1px solid #333;text-align:left}
+  td,th{padding:5px 8px;border-bottom:1px solid #333;text-align:left;vertical-align:middle}
+  th{color:var(--mut);font-weight:600;position:sticky;top:0;background:var(--card)}
+  td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+  .scroll{overflow-x:auto;max-height:420px;overflow-y:auto}
+  .chip{display:inline-block;padding:2px 9px;border-radius:99px;font-size:12px;font-weight:600}
+  .chip.ok{background:#14532d;color:#86efac}.chip.warn{background:#78350f;color:#fcd34d}
+  .chip.err{background:#7f1d1d;color:#fca5a5}.chip.mut{background:#333;color:#bbb}
+  .mini{padding:2px 9px;font-size:15px;line-height:1.2}
+
+  /* lote */
+  .tot{display:flex;gap:18px;flex-wrap:wrap;margin:10px 0;font-variant-numeric:tabular-nums}
+  .tot div{min-width:90px}.tot b{display:block;font-size:22px}
+  .tot .dif.err b{color:var(--err)}.tot .dif.ok b{color:var(--ok)}
+  .av{margin:6px 0;padding:8px 10px;border-radius:8px;font-size:14px}
+  .av.err{background:#450a0a;border:1px solid var(--err)}.av.warn{background:#451a03;border:1px solid var(--warn)}
+  .av.info{background:#172033;border:1px solid #334}
+  video{width:100%;max-height:260px;background:#000;border-radius:10px;object-fit:cover}
+  #toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);padding:10px 16px;border-radius:10px;background:#222;border:1px solid #555;z-index:9;max-width:90vw}
+  #toast.err{border-color:var(--err)}#toast.ok{border-color:var(--ok)}#toast.warn{border-color:var(--warn)}
+  .labels{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
+  .labels figure{margin:0;background:#fff;color:#000;border-radius:8px;padding:8px;text-align:center;font:600 13px monospace}
+  .labels svg{width:100%;height:56px;display:block}
+
+  textarea{width:100%;height:200px;background:#000;color:#9f9;border:1px solid #333;border-radius:8px;font-family:monospace;font-size:12px}
 </style>
 </head>
 <body>
-<h1>Test Balanza T-Scale (RS-232)</h1>
+<h1>Zipeado + Balanza T-Scale</h1>
+<nav class="tabs">
+  <button class="on" data-tab="zip">Zipeado</button>
+  <button data-tab="mat">Guías</button>
+  <button data-tab="bal">Balanza (test)</button>
+</nav>
+
+<!-- ============ ZIPEADO ============ -->
+<section id="tab-zip">
+  <div class="card" id="zVacio" hidden>
+    <b>Primero carga la matriz de guías.</b>
+    <p class="mut">Sube el Excel de zipeado (columnas Guia, B.Manifestados, P.Manifestado…). Se lee en tu navegador, no se sube a ningún servidor.</p>
+    <div class="row">
+      <button class="pri" data-act="importar">Cargar Excel / CSV</button>
+      <button data-act="demo">Usar datos de demo</button>
+    </div>
+  </div>
+
+  <div class="card" id="zResumen">
+    <div class="row" style="margin:0 0 8px"><b id="rTit">Sin matriz</b><span class="mut grow" id="rSub"></span></div>
+    <div class="bar"><i id="rBar"></i></div>
+    <div class="row" style="margin:10px 0 0">
+      <button class="ok" data-act="exportar">⬇ Descargar zipeado (Excel)</button>
+      <button data-act="exportarCsv">CSV</button>
+      <button data-act="finalizar" id="btnFin">Finalizar zipeado</button>
+    </div>
+    <div id="zCierre"></div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <b>1 · Peso</b>
+      <div class="peso" id="zPeso">-- kg</div>
+      <div class="mut" id="zPesoInfo">Sin lectura. Conecta la balanza (pestaña Balanza) o escribe el peso.</div>
+      <div class="row">
+        <input type="number" id="zManual" step="0.01" min="0" placeholder="Peso manual (kg)" class="grow" inputmode="decimal">
+        <button data-act="usarManual">Usar peso</button>
+      </div>
+      <div class="row">
+        <label class="mut"><input type="checkbox" id="zAuto" checked style="vertical-align:middle"> Tomar peso estable de la balanza automáticamente</label>
+        <button data-act="tomarPeso">Tomar peso ahora</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <b>2 · Pistoleo de guía</b> <span class="mut">(un escaneo = un bulto)</span>
+      <div class="row">
+        <input type="text" id="zScan" class="grow" placeholder="Escanea o escribe la guía y Enter" autocomplete="off" autocapitalize="off" inputmode="text">
+        <button class="pri" data-act="escanearInput">Agregar</button>
+      </div>
+      <div class="row">
+        <button data-act="cam" id="btnCam">📷 Escanear con cámara</button>
+        <label class="mut">Repetir misma guía tras
+          <select id="zCool"><option value="800">0.8 s</option><option value="1500" selected>1.5 s</option><option value="3000">3 s</option></select>
+        </label>
+      </div>
+      <video id="zVideo" playsinline muted hidden></video>
+      <div class="mut" id="zCamInfo" hidden></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="margin:0"><b class="grow">3 · Lote en curso</b>
+      <label class="mut">Alerta si difiere más de <input type="number" id="zUmbral" value="1" step="0.1" min="0" style="width:70px;padding:4px 6px"> kg</label>
+    </div>
+    <p class="mut" style="margin:4px 0">El orden no importa: puedes pesar y luego escanear, o al revés. Se compara el peso de la balanza contra lo manifestado de los bultos escaneados.</p>
+    <div id="zLoteVacio" class="mut">Aún no hay guías ni peso en este lote.</div>
+    <div class="scroll" style="max-height:240px"><table id="zLoteTabla" hidden>
+      <thead><tr><th>Guía</th><th>Consignatario / descripción</th><th class="n">Bultos</th><th class="n">P. manif. (prop.)</th><th></th></tr></thead>
+      <tbody id="zLoteBody"></tbody></table></div>
+    <div class="tot">
+      <div><span class="mut">Peso balanza</span><b id="tPeso">--</b></div>
+      <div><span class="mut">Manifestado</span><b id="tEsp">--</b></div>
+      <div class="dif" id="tDifBox"><span class="mut">Diferencia</span><b id="tDif">--</b></div>
+    </div>
+    <div id="zAvisos"></div>
+    <div class="row">
+      <button class="ok" data-act="cerrar" id="btnCerrar">Confirmar lote</button>
+      <button data-act="quitarPeso">Quitar peso</button>
+      <button class="bad" data-act="descartar">Descartar lote</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="margin:0"><b class="grow">Lotes zipeados</b>
+      <button data-act="deshacer">Deshacer último</button>
+      <button data-act="csvLotes">CSV de lotes</button>
+    </div>
+    <div class="scroll"><table>
+      <thead><tr><th>Hora</th><th>Guías</th><th class="n">Peso</th><th class="n">Manif.</th><th class="n">Dif.</th><th></th></tr></thead>
+      <tbody id="zLotes"></tbody></table></div>
+    <div class="mut" id="zLotesVacio">Nada zipeado todavía.</div>
+  </div>
+</section>
+
+<!-- ============ GUIAS ============ -->
+<section id="tab-mat" hidden>
+  <div class="row">
+    <button class="pri" data-act="importar">Cargar Excel / CSV</button>
+    <button data-act="exportar">Descargar zipeado (Excel)</button>
+    <button data-act="demo">Datos de demo</button>
+    <button class="bad" data-act="reiniciar" id="btnReset">Reiniciar conteo</button>
+  </div>
+  <input type="file" id="fileIn" accept=".xlsx,.xls,.csv" hidden>
+  <div class="row">
+    <input type="search" id="mFiltro" class="grow" placeholder="Buscar guía, consignatario o descripción">
+    <select id="mEstado">
+      <option value="">Todas</option><option value="pend">Pendientes</option><option value="parc">Parciales</option>
+      <option value="comp">Completas</option><option value="exc">Con exceso</option><option value="dbul">Con diferencia de bultos (+/−)</option><option value="dif">Con diferencia de peso</option>
+    </select>
+  </div>
+  <div class="card scroll" style="max-height:520px"><table>
+    <thead><tr><th>Guía</th><th>Consignatario</th><th>Descripción</th><th class="n">B.Man</th><th class="n">B.Rec</th><th class="n">Dif B</th><th class="n">P.Man</th><th class="n">P.Rec</th><th class="n">Dif P</th><th>Estado / alerta</th></tr></thead>
+    <tbody id="mBody"></tbody></table></div>
+  <div class="mut" id="mPie"></div>
+
+  <details id="etiq" class="card">
+    <summary><b>Códigos de barras de prueba</b> <span class="mut">(para escanear con el celular apuntando a esta pantalla)</span></summary>
+    <p class="mut">Muestra las primeras 12 guías de la lista filtrada, en Code 128. Si tus etiquetas reales usan otro formato, escanea una y mira qué texto llega.</p>
+    <div class="labels" id="etiqGrid"></div>
+  </details>
+</section>
+
+<!-- ============ BALANZA (test original) ============ -->
+<section id="tab-bal" hidden>
 <p id="estado">Desconectado. Usar Chrome o Edge en PC.</p>
 
 <div class="row">
@@ -36,7 +207,7 @@
   <button id="btnSim">Simular lectura</button>
 </div>
 
-<div id="peso">-- kg</div>
+<div class="peso" id="peso">-- kg</div>
 
 <h3>Ultimas lecturas</h3>
 <table><thead><tr><th>Hora</th><th>Peso</th><th>Estable</th><th>Linea cruda</th></tr></thead><tbody id="hist"></tbody></table>
@@ -44,9 +215,19 @@
 <h3>Log crudo (copiar y mandar si algo no sale)</h3>
 <textarea id="log" readonly></textarea>
 <div class="row"><button id="btnCopy">Copiar log</button><button id="btnClear">Limpiar</button></div>
+</section>
+
+<div id="toast" hidden></div>
 
 <script>
 const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const f2 = n => (n==null||isNaN(n)) ? '--' : n.toFixed(2);
+const fS = n => (n>0?'+':'') + n.toFixed(2);
+
+/* =====================================================================
+   BALANZA (Web Serial) — igual que antes, con un gancho hacia Zipeado
+   ===================================================================== */
 let port, reader, keep = false, buf = '', flushTimer;
 const dec = new TextDecoder();
 
@@ -110,11 +291,12 @@ function linea(l){
 function mostrar(peso, unidad, estable, cruda){
   const p = $('peso');
   p.textContent = peso.toFixed(2)+' '+unidad;
-  p.className = estable ? 'ok' : 'inestable';
+  p.className = 'peso ' + (estable ? 'ok' : 'inestable');
   const tr = document.createElement('tr');
   tr.innerHTML = `<td>${new Date().toLocaleTimeString()}</td><td>${peso.toFixed(2)} ${unidad}</td><td>${estable?'si':'no'}</td><td>${cruda.replace(/</g,'&lt;')}</td>`;
   $('hist').prepend(tr);
   while($('hist').children.length>10) $('hist').lastChild.remove();
+  onLectura(peso, unidad, estable, 'balanza');   // <- alimenta el modulo Zipeado
 }
 
 // Autodetect: prueba cada baudrate unos segundos y se queda con el que llega texto legible
@@ -170,6 +352,464 @@ $('btnDes').onclick = desconectar;
 $('btnSim').onclick = () => linea('ST,GS,  '+(Math.random()*50).toFixed(2)+' kg');
 $('btnCopy').onclick = () => { navigator.clipboard.writeText($('log').value); };
 $('btnClear').onclick = () => { $('log').value=''; };
+
+/* =====================================================================
+   ZIPEADO
+   Flujo (segun el diagrama): peso de balanza + pistoleo de guia, en
+   cualquier orden, se juntan en un "lote". Al confirmar se suman
+   B.Recibidos / P.Recibido y se compara contra lo manifestado.
+   ===================================================================== */
+const LS = 'zipeado_v1';
+const S = { pre:[], cols:null, rows:[], lote:{scans:{}, peso:null, fuente:''}, lotes:[], archivo:'', umbral:1, auto:true, final:false };
+let IDX = new Map();           // guia -> fila
+let LIVE = null;               // ultima lectura de peso {kg, estable, fuente}
+let ARMADO = true;             // la captura automatica se rearma cuando la balanza queda vacia
+const MIN_KG = 0.05;           // por debajo de esto se considera balanza vacia
+
+function guardar(){ try{ localStorage.setItem(LS, JSON.stringify(S)); }catch(e){} }
+function cargarLS(){
+  try{ const j = JSON.parse(localStorage.getItem(LS)||'null'); if(j && j.cols) Object.assign(S, j); }catch(e){}
+  reindex();
+}
+function reindex(){ IDX = new Map(); S.rows.forEach(r => { if(!IDX.has(r.guia)) IDX.set(r.guia, r); }); }
+
+let toastT;
+function toast(msg, tipo='ok'){
+  const t=$('toast'); t.textContent=msg; t.className=tipo; t.hidden=false;
+  clearTimeout(toastT); toastT=setTimeout(()=>t.hidden=true, 2800);
+}
+let actx;
+function beep(ok){
+  try{
+    actx = actx || new (window.AudioContext||window.webkitAudioContext)();
+    const o=actx.createOscillator(), g=actx.createGain();
+    o.frequency.value = ok ? 880 : 220; g.gain.value = .08;
+    o.connect(g); g.connect(actx.destination); o.start(); o.stop(actx.currentTime + (ok?.08:.25));
+  }catch(e){}
+  try{ navigator.vibrate?.(ok?30:[60,40,60]); }catch(e){}
+}
+
+/* ---------- Importar matriz ---------- */
+const norm = s => String(s??'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
+const num = v => { if(typeof v==='number') return v; const n=parseFloat(String(v??'').replace(',','.')); return isNaN(n)?null:n; };
+
+function importarAOA(aoa, nombre){
+  const h = aoa.findIndex(r => r && r.some(c => norm(c)==='guia'));
+  if(h<0) throw new Error('No encontré la columna "Guia" en el archivo');
+  const H = aoa[h].map(norm), f = n => H.indexOf(n);
+  const cols = {guia:f('guia'), master:f('master'), bMan:f('bmanifestados'), pMan:f('pmanifestado'),
+                bRec:f('brecibidos'), pRec:f('precibido'), cons:f('consignatario'), desc:f('descripcion')};
+  if(cols.bMan<0 || cols.pMan<0) throw new Error('Faltan las columnas B.Manifestados y/o P.Manifestado');
+  let width = Math.max(...aoa.map(r => r ? r.length : 0));
+  const hdr = aoa[h].slice(); while(hdr.length<width) hdr.push(null);
+  if(cols.bRec<0){ cols.bRec = width++; hdr[cols.bRec] = 'B.Recibidos'; }
+  if(cols.pRec<0){ cols.pRec = width++; hdr[cols.pRec] = 'P.Recibido'; }
+  const pre = aoa.slice(0,h).map(r => r||[]); pre.push(hdr);
+  const rows = []; let started = false, dup = 0; const vistos = new Set();
+  for(let i=h+1;i<aoa.length;i++){
+    const r = (aoa[i]||[]).slice(); while(r.length<width) r.push(null);
+    const g = r[cols.guia], b = num(r[cols.bMan]), p = num(r[cols.pMan]);
+    if(g==null || String(g).trim()==='' || b==null || p==null){ if(!started) pre.push(r); continue; }
+    started = true;
+    const guia = String(g).trim();
+    if(vistos.has(guia)) dup++; vistos.add(guia);
+    rows.push({guia, master: cols.master>=0 ? String(r[cols.master]??'') : '', bMan:b, pMan:p,
+      cons: cols.cons>=0 ? String(r[cols.cons]??'') : '', desc: cols.desc>=0 ? String(r[cols.desc]??'') : '',
+      bRec: num(r[cols.bRec])||0, pRec: num(r[cols.pRec])||0, raw:r});
+  }
+  if(!rows.length) throw new Error('No encontré filas de guías con bultos y peso');
+  S.pre = pre; S.cols = cols; S.rows = rows; S.archivo = nombre||'matriz';
+  S.lote = {scans:{}, peso:null, fuente:''}; S.lotes = [];
+  reindex(); guardar(); renderTodo();
+  toast(`${rows.length} guías cargadas` + (dup? ` (${dup} repetidas, se usa la primera)`:''), dup?'warn':'ok');
+}
+
+function parseCSV(t){
+  t = t.replace(/^﻿/,''); const sep = (t.split('\n')[0].match(/;/g)||[]).length > (t.split('\n')[0].match(/,/g)||[]).length ? ';' : ',';
+  const out=[]; let row=[], cur='', q=false;
+  for(let i=0;i<t.length;i++){
+    const c=t[i];
+    if(q){ if(c==='"'){ if(t[i+1]==='"'){cur+='"';i++;} else q=false; } else cur+=c; }
+    else if(c==='"') q=true;
+    else if(c===sep){ row.push(cur); cur=''; }
+    else if(c==='\n'||c==='\r'){ if(c==='\r'&&t[i+1]==='\n') i++; row.push(cur); out.push(row); row=[]; cur=''; }
+    else cur+=c;
+  }
+  if(cur!==''||row.length){ row.push(cur); out.push(row); }
+  return out.map(r => r.map(c => c===''?null:c));
+}
+
+let xlsxP;
+function cargarXLSX(){
+  if(window.XLSX) return Promise.resolve();
+  return xlsxP = xlsxP || new Promise((ok,ko)=>{
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload=ok; s.onerror=()=>{ xlsxP=null; ko(new Error('No pude cargar la librería de Excel (¿sin internet?). Prueba con CSV.')); };
+    document.head.appendChild(s);
+  });
+}
+
+async function leerArchivo(file){
+  try{
+    if(/\.csv$/i.test(file.name)){ importarAOA(parseCSV(await file.text()), file.name); return; }
+    await cargarXLSX();
+    const wb = XLSX.read(await file.arrayBuffer(), {type:'array'});
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    importarAOA(XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null}), file.name);
+  }catch(e){ toast(e.message,'err'); }
+}
+
+function demo(){
+  const d=[['900001',1,1.2,'CLIENTE DEMO 1','AUDIFONOS'],['900002',3,4.5,'CLIENTE DEMO 2','ZAPATILLAS'],['900003',2,2.0,'CLIENTE DEMO 3','POLOS'],
+           ['900004',1,7.7,'CLIENTE DEMO 4','REPUESTO'],['900005',4,9.6,'CLIENTE DEMO 5','JUGUETES'],['900006',1,0.8,'CLIENTE DEMO 6','FUNDA CELULAR']];
+  importarAOA([['Master','Guia','B.Manifestados','P.Manifestado','B.Recibidos','P.Recibido','Consignatario','Descripcion'],
+    ...d.map(x=>['00000000000',x[0],x[1],x[2],null,null,x[3],x[4]])], 'demo.xlsx');
+}
+
+/* ---------- Exportar ---------- */
+function aoaFinal(){
+  const c=S.cols, hdr=S.pre[S.pre.length-1], base=Math.max(...[hdr,...S.rows.map(r=>r.raw)].map(r=>r.length));
+  const X={dB:base, dP:base+1, al:base+2};
+  const pre=S.pre.map((r,i)=>{ const a=r.slice(); while(a.length<base) a.push(null); if(i===S.pre.length-1){ a[X.dB]='Dif. Bultos'; a[X.dP]='Dif. Peso kg'; a[X.al]='Alerta'; } return a; });
+  const alertRows=new Set();
+  const body=S.rows.map((r,k) => {
+    const a=r.raw.slice(); while(a.length<base) a.push(null);
+    a[c.bMan]=r.bMan; a[c.pMan]=r.pMan; a[c.bRec]=r.bRec||null; a[c.pRec]=r.bRec? +r.pRec.toFixed(3):null;
+    a[X.dB]=(r.bRec||S.final) ? difB(r) : null; a[X.dP]=r.bRec? +(r.pRec-r.pMan).toFixed(3):null;
+    const al = r.bRec ? alertasGuia(r).map(x=>x.t) : ['NO RECIBIDA'];
+    a[X.al]=al.length ? al.join(' · ') : (r.bRec ? 'OK' : null);
+    if(al.length && r.bRec) alertRows.add(pre.length+k);
+    return a;
+  });
+  return {aoa:[...pre,...body], hdrRow:pre.length-1, alertCol:X.al, alertRows};
+}
+function descargar(blob, nombre){
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=nombre; document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+const csvTxt = aoa => '﻿' + aoa.map(r => (r||[]).map(v => { v = v==null?'':String(v); return /[",;\n\r]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }).join(',')).join('\r\n');
+const baseName = () => (S.archivo||'zipeado').replace(/\.[^.]+$/,'');
+
+/* --- Excel (.xlsx) sin librerias: zip sin compresion + XML minimo --- */
+function crc32(u){ let c=0xFFFFFFFF; for(let i=0;i<u.length;i++){ c^=u[i]; for(let k=0;k<8;k++) c=(c>>>1)^(0xEDB88320&-(c&1)); } return (~c)>>>0; }
+function zipStore(files){
+  const enc=new TextEncoder(), parts=[], cen=[]; let off=0;
+  for(const f of files){
+    const nm=enc.encode(f.name), data=enc.encode(f.text), crc=crc32(data), sz=data.length;
+    const lh=new DataView(new ArrayBuffer(30));
+    lh.setUint32(0,0x04034b50,true); lh.setUint16(4,20,true); lh.setUint16(6,0x0800,true); lh.setUint16(12,0x21,true);
+    lh.setUint32(14,crc,true); lh.setUint32(18,sz,true); lh.setUint32(22,sz,true); lh.setUint16(26,nm.length,true);
+    parts.push(lh.buffer,nm,data);
+    const ch=new DataView(new ArrayBuffer(46));
+    ch.setUint32(0,0x02014b50,true); ch.setUint16(4,20,true); ch.setUint16(6,20,true); ch.setUint16(8,0x0800,true); ch.setUint16(14,0x21,true);
+    ch.setUint32(16,crc,true); ch.setUint32(20,sz,true); ch.setUint32(24,sz,true); ch.setUint16(28,nm.length,true); ch.setUint32(42,off,true);
+    cen.push(ch.buffer,nm); off+=30+nm.length+sz;
+  }
+  const csz=cen.reduce((a,b)=>a+b.byteLength,0), end=new DataView(new ArrayBuffer(22));
+  end.setUint32(0,0x06054b50,true); end.setUint16(8,files.length,true); end.setUint16(10,files.length,true); end.setUint32(12,csz,true); end.setUint32(16,off,true);
+  return new Blob([...parts,...cen,end.buffer],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+}
+function xlsxBlob({aoa,hdrRow,alertCol,alertRows}){
+  const col = n => { let s=''; for(n++; n>0; n=Math.floor((n-1)/26)) s=String.fromCharCode(65+(n-1)%26)+s; return s; };
+  const x = t => String(t).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const rows = aoa.map((r,i) => '<row r="'+(i+1)+'">' + r.map((v,j) => {
+    if(v==null || v==='') return '';
+    const st = i===hdrRow ? ' s="1"' : (alertRows.has(i) && (j===alertCol) ? ' s="2"' : '');
+    const ref = col(j)+(i+1);
+    return typeof v==='number' && isFinite(v) ? `<c r="${ref}"${st}><v>${v}</v></c>` : `<c r="${ref}"${st} t="inlineStr"><is><t xml:space="preserve">${x(v)}</t></is></c>`;
+  }).join('') + '</row>').join('');
+  const H='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n', NS='xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"';
+  return zipStore([
+    {name:'[Content_Types].xml', text:H+'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>'},
+    {name:'_rels/.rels', text:H+'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'},
+    {name:'xl/workbook.xml', text:H+`<workbook ${NS} xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="ZIPEADO" sheetId="1" r:id="rId1"/></sheets></workbook>`},
+    {name:'xl/_rels/workbook.xml.rels', text:H+'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'},
+    {name:'xl/styles.xml', text:H+`<styleSheet ${NS}><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFD9E1F2"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFC7CE"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="0" fontId="1" fillId="3" borderId="0" xfId="0" applyFont="1" applyFill="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`},
+    {name:'xl/worksheets/sheet1.xml', text:H+`<worksheet ${NS}><sheetData>${rows}</sheetData></worksheet>`}
+  ]);
+}
+
+function exportar(){
+  if(!S.rows.length) return toast('No hay matriz cargada','warn');
+  descargar(xlsxBlob(aoaFinal()), baseName()+'_zipeado.xlsx');
+}
+function exportarCsv(){
+  if(!S.rows.length) return toast('No hay matriz cargada','warn');
+  descargar(new Blob([csvTxt(aoaFinal().aoa)],{type:'text/csv'}), baseName()+'_zipeado.csv');
+}
+function csvLotes(){
+  if(!S.lotes.length) return toast('No hay lotes todavía','warn');
+  const a=[['Hora','Guias (bultos)','Desconocidas','Peso balanza kg','Manifestado kg','Diferencia kg','Alerta']];
+  [...S.lotes].reverse().forEach(l => a.push([l.hora, l.items.map(i=>i.guia+' x'+i.n).join(' | '), (l.unk||[]).join(' | '), l.peso, l.esp?.toFixed(3), l.dif?.toFixed(3), l.alerta?'SI':'']));
+  descargar(new Blob([csvTxt(a)],{type:'text/csv'}), baseName()+'_lotes.csv');
+}
+
+/* ---------- Peso ---------- */
+function onLectura(v, unidad, estable, fuente){
+  const kg = v * ({kg:1, g:.001, lb:.45359237, oz:.0283495}[unidad] || 1);
+  LIVE = {kg, estable, fuente};
+  renderLive();
+  if(estable && kg <= MIN_KG) ARMADO = true;
+  else if(S.auto && ARMADO && estable && kg > MIN_KG && S.lote.peso !== +kg.toFixed(3)) fijarPeso(kg, fuente);
+}
+function fijarPeso(kg, fuente){
+  S.lote.peso = +kg.toFixed(3); S.lote.fuente = fuente; guardar(); renderLote();
+}
+function renderLive(){
+  const p=$('zPeso');
+  if(!LIVE){ p.textContent='-- kg'; p.className='peso'; return; }
+  p.textContent = f2(LIVE.kg)+' kg'; p.className='peso '+(LIVE.estable?'ok':'inestable');
+  $('zPesoInfo').textContent = (LIVE.fuente==='balanza'?'Balanza':'Manual') + (LIVE.estable?' · estable':' · inestable (esperando…)') + ' · ' + new Date().toLocaleTimeString();
+}
+
+/* ---------- Pistoleo ---------- */
+function resolver(cod){
+  if(IDX.has(cod)) return cod;
+  const keys=[...IDX.keys()];
+  const fin = keys.filter(g => cod.endsWith(g)).sort((a,b)=>b.length-a.length);
+  if(fin.length) return fin[0];
+  const inc = keys.filter(g => cod.includes(g));
+  return inc.length===1 ? inc[0] : null;
+}
+function escanear(cod){
+  cod = String(cod||'').trim(); if(!cod) return;
+  if(!S.rows.length){ toast('Carga primero la matriz de guías','warn'); beep(false); return; }
+  const g = resolver(cod) || cod;                 // si no existe se guarda tal cual y se marca en rojo
+  S.lote.scans[g] = (S.lote.scans[g]||0) + 1;
+  const m = IDX.get(g);
+  beep(!!m);
+  if(!m) toast(`"${cod}" no está en la matriz`,'err');
+  guardar(); renderLote();
+}
+function ajustar(g, d){
+  const n = (S.lote.scans[g]||0) + d;
+  if(n<=0) delete S.lote.scans[g]; else S.lote.scans[g]=n;
+  guardar(); renderLote();
+}
+
+/* ---------- Lote ---------- */
+function evalLote(){
+  const L=S.lote, av=[]; let esp=0, nb=0, exc=false;
+  for(const [g,n] of Object.entries(L.scans)){
+    const m = IDX.get(g);
+    if(!m){ av.push({t:'err', m:`"${g}" no está en la matriz (×${n})`}); continue; }
+    nb += n; esp += m.pMan * n / m.bMan;
+    const tot = m.bRec + n;
+    if(tot > m.bMan){ exc = true; av.push({t:'err', m:`Guía ${g}: ${tot} bultos escaneados vs ${m.bMan} manifestados (${tot-m.bMan} de más)`}); }
+    else if(tot < m.bMan) av.push({t:'info', m:`Guía ${g}: faltan ${m.bMan-tot} bulto${m.bMan-tot>1?'s':''} por escanear (${tot}/${m.bMan})`});
+  }
+  let dif=null, alerta=false;
+  if(L.peso!=null && esp>0){
+    dif = L.peso - esp; alerta = Math.abs(dif) > S.umbral + 1e-9;
+    if(alerta) av.unshift({t:'err', m:`Diferencia de ${fS(dif)} kg contra lo manifestado (límite ${S.umbral} kg)`});
+  }
+  const hay = Object.keys(L.scans).length;
+  if(hay && L.peso==null) av.push({t:'info', m:'Falta el peso de la balanza.'});
+  if(!hay && L.peso!=null) av.push({t:'info', m:'Falta escanear la guía de estos bultos.'});
+  return {esp, dif, alerta, exc, av, nb};
+}
+
+function cerrar(){
+  const L=S.lote, e=evalLote();
+  const known = Object.entries(L.scans).filter(([g])=>IDX.has(g));
+  if(L.peso==null) return toast('Falta el peso','warn');
+  if(!known.length) return toast('Falta escanear una guía válida','warn');
+  const items = known.map(([g,n]) => {
+    const m=IDX.get(g);
+    const share = e.esp>0 ? L.peso*(m.pMan*n/m.bMan)/e.esp : L.peso*n/e.nb;   // reparto proporcional al manifestado
+    m.bRec += n; m.pRec = +(m.pRec+share).toFixed(3);
+    return {guia:g, n, peso:+share.toFixed(3)};
+  });
+  S.lotes.unshift({id:Date.now(), hora:new Date().toLocaleTimeString(), items,
+    unk:Object.keys(L.scans).filter(g=>!IDX.has(g)), peso:L.peso, esp:e.esp, dif:e.dif, alerta:e.alerta||e.exc});
+  S.lotes = S.lotes.slice(0,500);
+  S.lote = {scans:{}, peso:null, fuente:''}; ARMADO = false;   // hasta que la balanza se vacíe
+  beep(!(e.alerta||e.exc)); guardar(); renderTodo();
+  toast((e.alerta||e.exc) ? 'Lote guardado CON alerta' : 'Lote guardado', (e.alerta||e.exc)?'warn':'ok');
+}
+function deshacer(){
+  const l=S.lotes.shift(); if(!l) return toast('No hay lotes para deshacer','warn');
+  l.items.forEach(i => { const m=IDX.get(i.guia); if(m){ m.bRec=Math.max(0,m.bRec-i.n); m.pRec=Math.max(0,+(m.pRec-i.peso).toFixed(3)); } });
+  guardar(); renderTodo(); toast('Último lote deshecho');
+}
+
+/* ---------- Render ---------- */
+function estadoGuia(m){
+  if(m.bRec===0) return 'pend';
+  if(m.bRec<m.bMan) return 'parc';
+  if(m.bRec>m.bMan) return 'exc';
+  return 'comp';
+}
+const difB = m => m.bRec - m.bMan;
+function alertasGuia(m){
+  const a=[], d=difB(m);
+  if(d>0) a.push({n:'err', t:`+${d} bulto${d>1?'s':''}`});
+  else if(d<0 && (m.bRec>0 || S.final)) a.push({n:S.final?'err':'warn', t:`−${-d} bulto${-d>1?'s':''}`+(m.bRec?'':' (no recibida)')});
+  if(d>=0 && m.bRec>0 && Math.abs(m.pRec-m.pMan)>S.umbral) a.push({n:'err', t:`peso ${fS(m.pRec-m.pMan)} kg`});
+  return a;
+}
+function renderCierre(){
+  const el=$('zCierre'); $('btnFin').textContent = S.final ? 'Reabrir zipeado' : 'Finalizar zipeado';
+  let mas=[], menos=[], peso=[];
+  S.rows.forEach(m => { const d=difB(m);
+    if(d>0) mas.push(m); else if(d<0 && (S.final || m.bRec>0)) menos.push(m);
+    if(d>=0 && m.bRec>0 && Math.abs(m.pRec-m.pMan)>S.umbral) peso.push(m); });
+  if(!mas.length && !peso.length && !S.final && !menos.length){ el.innerHTML=''; return; }
+  const li = (arr,fn) => arr.slice(0,15).map(fn).join('') + (arr.length>15?`<div class="mut">… y ${arr.length-15} más (ver pestaña Guías)</div>`:'');
+  el.innerHTML = (S.final?'<div class="av info"><b>Zipeado finalizado.</b> Las guías sin recibir cuentan como faltantes.</div>':'') +
+    (mas.length? `<div class="av err"><b>${mas.length} guía${mas.length>1?'s':''} con bultos de MÁS</b>${li(mas,m=>`<div>${esc(m.guia)} · ${m.bRec} escaneados / ${m.bMan} manifestados (+${difB(m)})</div>`)}</div>`:'') +
+    (menos.length? `<div class="av ${S.final?'err':'warn'}"><b>${menos.length} guía${menos.length>1?'s':''} con bultos de MENOS${S.final?'':' (aún en proceso)'}</b>${li(menos,m=>`<div>${esc(m.guia)} · ${m.bRec} / ${m.bMan} (−${-difB(m)})</div>`)}</div>`:'') +
+    (peso.length? `<div class="av err"><b>${peso.length} guía${peso.length>1?'s':''} con diferencia de peso &gt; ${S.umbral} kg</b>${li(peso,m=>`<div>${esc(m.guia)} · ${f2(m.pRec)} vs ${f2(m.pMan)} kg (${fS(m.pRec-m.pMan)})</div>`)}</div>`:'');
+}
+function renderResumen(){
+  const hay = S.rows.length>0;
+  $('zVacio').hidden = hay; $('zResumen').hidden = !hay;
+  renderCierre();
+  if(!hay) return;
+  const bMan=S.rows.reduce((a,r)=>a+r.bMan,0), bRec=S.rows.reduce((a,r)=>a+r.bRec,0);
+  const pMan=S.rows.reduce((a,r)=>a+r.pMan,0), pRec=S.rows.reduce((a,r)=>a+r.pRec,0);
+  const comp=S.rows.filter(r=>estadoGuia(r)==='comp').length;
+  $('rTit').textContent = `${bRec} / ${bMan} bultos`;
+  $('rSub').textContent = `${comp} de ${S.rows.length} guías completas · ${f2(pRec)} / ${f2(pMan)} kg · ${S.archivo}`;
+  $('rBar').style.width = Math.min(100, bMan? bRec*100/bMan : 0)+'%';
+}
+function renderLote(){
+  const L=S.lote, e=evalLote(), keys=Object.keys(L.scans);
+  $('zLoteVacio').hidden = keys.length>0 || L.peso!=null;
+  $('zLoteTabla').hidden = !keys.length;
+  $('zLoteBody').innerHTML = keys.map(g => {
+    const m=IDX.get(g), n=L.scans[g];
+    return `<tr><td><b>${esc(g)}</b></td><td>${m? esc(m.cons)+'<br><span class="mut">'+esc(m.desc)+'</span>' : '<span class="chip err">NO ESTÁ EN MATRIZ</span>'}</td>
+      <td class="n">${n}${m?' / '+m.bMan:''}</td><td class="n">${m? f2(m.pMan*n/m.bMan):'--'}</td>
+      <td class="n"><button class="mini" data-g="${esc(g)}" data-d="-1">−</button> <button class="mini" data-g="${esc(g)}" data-d="1">+</button></td></tr>`;
+  }).join('');
+  $('tPeso').textContent = L.peso!=null ? f2(L.peso)+' kg' : '--';
+  $('tEsp').textContent = e.esp>0 ? f2(e.esp)+' kg' : '--';
+  $('tDif').textContent = e.dif!=null ? fS(e.dif)+' kg' : '--';
+  $('tDifBox').className = 'dif ' + (e.dif==null ? '' : e.alerta ? 'err' : 'ok');
+  $('zAvisos').innerHTML = e.av.map(a=>`<div class="av ${a.t}">${esc(a.m)}</div>`).join('');
+  const btn=$('btnCerrar'), mal=e.alerta||e.exc; btn.textContent = mal ? 'Confirmar CON alerta' : 'Confirmar lote';
+  btn.className = mal ? 'bad' : 'ok';
+}
+function renderLotes(){
+  $('zLotesVacio').hidden = S.lotes.length>0;
+  $('zLotes').innerHTML = S.lotes.slice(0,30).map(l => `<tr>
+    <td>${esc(l.hora)}</td><td>${l.items.map(i=>esc(i.guia)+' ×'+i.n).join(', ')}${l.unk?.length?' <span class="chip err">+'+l.unk.length+' sin matriz</span>':''}</td>
+    <td class="n">${f2(l.peso)}</td><td class="n">${f2(l.esp)}</td><td class="n">${l.dif==null?'--':fS(l.dif)}</td>
+    <td>${l.alerta?'<span class="chip err">ALERTA</span>':'<span class="chip ok">OK</span>'}</td></tr>`).join('');
+}
+function renderMatriz(){
+  const q=norm($('mFiltro').value), est=$('mEstado').value;
+  const lista = S.rows.filter(m => {
+    if(q && !norm(m.guia+m.cons+m.desc).includes(q)) return false;
+    if(est==='dif') return m.bRec>=m.bMan && Math.abs(m.pRec-m.pMan)>S.umbral;
+    if(est==='dbul') return difB(m)>0 || (difB(m)<0 && (S.final || m.bRec>0));
+    return !est || estadoGuia(m)===est;
+  });
+  const chips={pend:['mut','Pendiente'],parc:['warn','Parcial'],comp:['ok','Completa'],exc:['err','Exceso']};
+  $('mBody').innerHTML = lista.slice(0,600).map(m => {
+    const e=estadoGuia(m), dif=m.bRec?m.pRec-m.pMan:null, alerta=m.bRec>=m.bMan && Math.abs(dif)>S.umbral, dB=difB(m), al=alertasGuia(m);
+    return `<tr><td><b>${esc(m.guia)}</b></td><td>${esc(m.cons)}</td><td>${esc(m.desc)}</td><td class="n">${m.bMan}</td><td class="n">${m.bRec}</td>
+      <td class="n" ${dB>0?'style="color:var(--err);font-weight:700"':''}>${m.bRec||S.final?(dB>0?'+':'')+dB:'--'}</td>
+      <td class="n">${f2(m.pMan)}</td><td class="n">${m.bRec?f2(m.pRec):'--'}</td><td class="n" ${alerta?'style="color:var(--err);font-weight:700"':''}>${dif==null?'--':fS(dif)}</td>
+      <td><span class="chip ${chips[e][0]}">${chips[e][1]}</span> ${al.map(x=>`<span class="chip ${x.n}">${x.t}</span>`).join(' ')}</td></tr>`; }).join('');
+  $('mPie').textContent = `${lista.length} de ${S.rows.length} guías` + (lista.length>600?' (se muestran 600)':'');
+  if($('etiq').open) renderEtiquetas(lista);
+}
+
+/* ---------- Code 128 para etiquetas de prueba ---------- */
+const C128 = '212222,222122,222221,121223,121322,131222,122213,122312,132212,221213,221312,231212,112232,122132,122231,113222,123122,123221,223211,221132,221231,213212,223112,312131,311222,321122,321221,312212,322112,322211,212123,212321,232121,111323,131123,131321,112313,132113,132311,211313,231113,231311,112133,112331,132131,113123,113321,133121,313121,211331,231131,213113,213311,213131,311123,311321,331121,312113,312311,332111,314111,221411,431111,111224,111422,121124,121421,141122,141221,112214,112412,122114,122411,142112,142211,241211,221114,413111,241112,134111,111242,121142,121241,114212,124112,124211,411212,421112,421211,212141,214121,412121,111143,111341,131141,114113,114311,411113,411311,113141,114131,311141,411131,211412,211214,211232,2331112'.split(',');
+function code128(txt){
+  const c=[];
+  if(/^\d+$/.test(txt) && txt.length%2===0){ c.push(105); for(let i=0;i<txt.length;i+=2) c.push(+txt.substr(i,2)); }
+  else { c.push(104); for(const ch of txt){ const v=ch.charCodeAt(0)-32; c.push(v>=0&&v<95?v:0); } }
+  let s=c[0]; for(let i=1;i<c.length;i++) s+=c[i]*i;
+  c.push(s%103, 106);
+  return c.map(v=>C128[v]).join('');
+}
+function barcodeSVG(txt){
+  const w=code128(txt); let x=10, r='';
+  for(let i=0;i<w.length;i++){ const n=+w[i]; if(i%2===0) r+=`<rect x="${x}" y="0" width="${n}" height="50" fill="#000"/>`; x+=n; }
+  return `<svg viewBox="0 0 ${x+10} 50" preserveAspectRatio="none" shape-rendering="crispEdges">${r}</svg>`;
+}
+function renderEtiquetas(lista){
+  lista = lista || S.rows;
+  $('etiqGrid').innerHTML = lista.slice(0,12).map(m => `<figure>${barcodeSVG(m.guia)}${esc(m.guia)}</figure>`).join('');
+}
+
+function renderTodo(){ renderResumen(); renderLive(); renderLote(); renderLotes(); renderMatriz(); $('zUmbral').value=S.umbral; $('zAuto').checked=S.auto; }
+
+/* ---------- Camara (BarcodeDetector) ---------- */
+let camStream=null, camTimer=null, detector=null, ultimo={cod:'',t:0};
+async function camToggle(){
+  if(camStream) return camOff();
+  if(!('BarcodeDetector' in window)){ toast('Este navegador no escanea con cámara. Usa Chrome en Android, o un lector / teclado.','err'); return; }
+  if(!navigator.mediaDevices?.getUserMedia){ toast('Cámara no disponible (¿HTTPS?)','err'); return; }
+  try{
+    camStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}}, audio:false});
+    const v=$('zVideo'); v.srcObject=camStream; v.hidden=false; await v.play();
+    const sup = await BarcodeDetector.getSupportedFormats();
+    const want = ['code_128','code_39','code_93','codabar','ean_13','ean_8','itf','upc_a','upc_e','qr_code','data_matrix'].filter(f=>sup.includes(f));
+    detector = new BarcodeDetector({formats:want});
+    $('btnCam').textContent='⏹ Detener cámara';
+    $('zCamInfo').hidden=false; $('zCamInfo').textContent='Apunta al código de barras de la etiqueta.';
+    camLoop();
+  }catch(e){ camOff(); toast('No pude abrir la cámara: '+e.message,'err'); }
+}
+function camOff(){
+  clearTimeout(camTimer); camStream?.getTracks().forEach(t=>t.stop()); camStream=null;
+  $('zVideo').hidden=true; $('zCamInfo').hidden=true; $('btnCam').textContent='📷 Escanear con cámara';
+}
+async function camLoop(){
+  if(!camStream) return;
+  try{
+    const r = await detector.detect($('zVideo'));
+    if(r.length){
+      const cod=r[0].rawValue, ahora=Date.now();
+      if(cod!==ultimo.cod || ahora-ultimo.t > +$('zCool').value){ ultimo={cod,t:ahora}; $('zCamInfo').textContent='Leído: '+cod; escanear(cod); }
+      else ultimo.t = ahora;     // sigue apuntando al mismo: no cuenta otra vez hasta que lo retires
+    }
+  }catch(e){}
+  camTimer = setTimeout(camLoop, 120);
+}
+
+/* ---------- Eventos ---------- */
+const ACT = {
+  importar: () => $('fileIn').click(),
+  demo, exportar, exportarCsv, csvLotes, deshacer, cerrar,
+  finalizar: () => { S.final=!S.final; guardar(); renderTodo(); },
+  cam: camToggle,
+  escanearInput: () => { const i=$('zScan'); escanear(i.value); i.value=''; i.focus(); },
+  usarManual: () => { const v=num($('zManual').value); if(v==null||v<=0) return toast('Escribe un peso válido','warn'); onLectura(v,'kg',true,'manual'); fijarPeso(v,'manual'); },
+  tomarPeso: () => { if(!LIVE||!LIVE.estable||LIVE.kg<=MIN_KG) return toast('No hay un peso estable para tomar','warn'); fijarPeso(LIVE.kg, LIVE.fuente); },
+  quitarPeso: () => { S.lote.peso=null; ARMADO=false; guardar(); renderLote(); },
+  descartar: () => { S.lote={scans:{},peso:null,fuente:''}; ARMADO=false; guardar(); renderLote(); },
+  reiniciar: () => {
+    const b=$('btnReset');
+    if(b.dataset.sure){ S.rows.forEach(r=>{r.bRec=0;r.pRec=0;}); S.lotes=[]; S.lote={scans:{},peso:null,fuente:''}; delete b.dataset.sure; b.textContent='Reiniciar conteo'; guardar(); renderTodo(); toast('Conteo reiniciado'); }
+    else { b.dataset.sure=1; b.textContent='¿Seguro? Toca otra vez'; setTimeout(()=>{ delete b.dataset.sure; b.textContent='Reiniciar conteo'; },3000); }
+  }
+};
+document.addEventListener('click', e => {
+  const t=e.target.closest('[data-act],[data-tab],[data-g]'); if(!t) return;
+  if(t.dataset.act) ACT[t.dataset.act]?.();
+  else if(t.dataset.g) ajustar(t.dataset.g, +t.dataset.d);
+  else if(t.dataset.tab){
+    document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('on', b===t));
+    ['zip','mat','bal'].forEach(k => $('tab-'+k).hidden = k!==t.dataset.tab);
+    if(t.dataset.tab==='zip' && !matchMedia('(pointer:coarse)').matches) $('zScan').focus();
+  }
+});
+$('zScan').addEventListener('keydown', e => { if(e.key==='Enter'){ e.preventDefault(); ACT.escanearInput(); } });
+$('zManual').addEventListener('keydown', e => { if(e.key==='Enter') ACT.usarManual(); });
+$('zUmbral').onchange = e => { S.umbral = Math.max(0, num(e.target.value) ?? 1); guardar(); renderLote(); renderMatriz(); };
+$('zAuto').onchange = e => { S.auto = e.target.checked; guardar(); };
+$('fileIn').onchange = e => { const f=e.target.files[0]; e.target.value=''; if(f) leerArchivo(f); };
+$('mFiltro').oninput = $('mEstado').onchange = renderMatriz;
+$('etiq').addEventListener('toggle', () => { if($('etiq').open) renderMatriz(); });
+
+cargarLS(); renderTodo();
 </script>
 </body>
 </html>
