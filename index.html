@@ -228,13 +228,15 @@ const fS = n => (n>0?'+':'') + n.toFixed(2);
 /* =====================================================================
    BALANZA (Web Serial) — igual que antes, con un gancho hacia Zipeado
    ===================================================================== */
-let port, reader, keep = false, buf = '', flushTimer;
+let port, reader, keep = false, buf = '', flushTimer, ocupado = false;
 const dec = new TextDecoder();
 
 function log(t){ const l=$('log'); l.value += new Date().toLocaleTimeString()+'  '+t+'\n'; l.scrollTop=l.scrollHeight; }
 
 async function conectar(){
   if(!('serial' in navigator)){ alert('Este navegador no soporta Web Serial. Usa Chrome o Edge en PC.'); return; }
+  if(ocupado){ log('Espera: la autodetección sigue corriendo.'); return; }
+  if(keep){ log('Ya está conectada. Desconecta primero para cambiar el baudrate.'); return; }
   try{
     if(!port) port = await navigator.serial.requestPort();
     await port.open({baudRate:+$('baud').value, dataBits:8, stopBits:1, parity:'none'});
@@ -301,20 +303,21 @@ function mostrar(peso, unidad, estable, cruda){
 
 // Autodetect: prueba cada baudrate unos segundos y se queda con el que llega texto legible
 async function probar(baud, ms){
-  await port.open({baudRate:baud, dataBits:8, stopBits:1, parity:'none'});
-  const r = port.readable.getReader();
   const datos = [];
-  const t = setTimeout(()=>r.cancel(), ms);
+  await port.open({baudRate:baud, dataBits:8, stopBits:1, parity:'none'});
   try{
-    while(true){
-      const {value, done} = await r.read();
-      if(done) break;
-      if(value) datos.push(...value);
-    }
-  }catch(e){}
-  clearTimeout(t);
-  r.releaseLock();
-  await port.close();
+    const r = port.readable.getReader();
+    const t = setTimeout(()=>r.cancel(), ms);
+    try{
+      while(true){
+        const {value, done} = await r.read();
+        if(done) break;
+        if(value) datos.push(...value);
+      }
+    }catch(e){}
+    clearTimeout(t);
+    r.releaseLock();
+  }finally{ try{ await port.close(); }catch(e){} }
   return datos;
 }
 
@@ -326,6 +329,8 @@ function esLegible(d){
 
 async function autodetectar(){
   if(!('serial' in navigator)){ alert('Usa Chrome o Edge en PC.'); return; }
+  if(ocupado){ log('La autodetección ya está corriendo, espera a que termine.'); return; }
+  ocupado = true; $('btnAuto').disabled = true;
   try{
     if(keep) await desconectar();
     if(!port) port = await navigator.serial.requestPort();
@@ -334,9 +339,11 @@ async function autodetectar(){
     for(const b of bauds){
       log('Probando '+b+' baud...');
       const d = await probar(b, 5000);
+      log('  '+b+' baud: '+d.length+' bytes'+(d.length ? ' -> '+d.slice(0,24).map(x=>x.toString(16).padStart(2,'0')).join(' ') : ' (silencio)'));
       if(esLegible(d)){
         $('baud').value = b;
         log('Detectado: '+b+' baud');
+        ocupado = false;
         await conectar();
         return;
       }
@@ -344,6 +351,7 @@ async function autodetectar(){
     $('estado').textContent = 'No se detecto nada. Revisa cable (null-modem) y modo de salida en menu SET.';
     log('Autodetect sin resultado');
   }catch(e){ log('Error autodetect: '+e.message); }
+  finally{ ocupado = false; $('btnAuto').disabled = false; }
 }
 
 $('btnCon').onclick = conectar;
