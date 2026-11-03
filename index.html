@@ -232,6 +232,22 @@ const fS = n => (n>0?'+':'') + n.toFixed(2);
 let port, reader, keep = false, buf = '', flushTimer, ocupado = false;
 const dec = new TextDecoder();
 
+function olvidarPuerto(msg){
+  keep = false; try{ reader?.cancel(); }catch(e){}
+  port = null; ocupado = false; $('btnAuto').disabled = false;
+  $('estado').textContent = 'Desconectado.';
+  if(msg) log(msg);
+}
+function falloAbrir(e){
+  log('Error: '+e.message);
+  if(/Failed to open|disconnected|lost|NetworkError|InvalidState/i.test(e.name+' '+e.message)){
+    olvidarPuerto('Se olvidó el puerto anterior. Revisa que el adaptador esté enchufado y que ningún otro programa use el COM; luego vuelve a pulsar el botón y elígelo de nuevo.');
+  }
+}
+if('serial' in navigator){
+  navigator.serial.addEventListener('disconnect', () => olvidarPuerto('El adaptador USB se DESCONECTÓ (cable flojo o falla del adaptador). Vuelve a enchufarlo y elige el puerto otra vez.'));
+  navigator.serial.addEventListener('connect', () => log('Se detectó un adaptador USB serie conectado.'));
+}
 function log(t){ const l=$('log'); l.value += new Date().toLocaleTimeString()+'  '+t+'\n'; l.scrollTop=l.scrollHeight; }
 
 async function conectar(){
@@ -246,7 +262,7 @@ async function conectar(){
     $('estado').textContent = 'Conectado a '+$('baud').value+' baud 8N1. Pon peso o presiona PRINT.';
     log('Conectado a '+$('baud').value);
     leer();
-  }catch(e){ log('Error al conectar: '+e.message); }
+  }catch(e){ falloAbrir(e); }
 }
 
 async function leer(){
@@ -353,7 +369,7 @@ async function autodetectar(){
     }
     $('estado').textContent = 'No se detecto nada. Revisa cable (null-modem) y modo de salida en menu SET.';
     log('Autodetect sin resultado');
-  }catch(e){ log('Error autodetect: '+e.message); }
+  }catch(e){ falloAbrir(e); }
   finally{ ocupado = false; $('btnAuto').disabled = false; }
 }
 
@@ -374,7 +390,7 @@ $('btnEco').onclick = async () => {
     clearTimeout(t); r.releaseLock(); await port.close();
     log(got.length ? 'ECO OK: llegó "'+String.fromCharCode(...got)+'". El adaptador y la página funcionan; el problema está en la balanza o en el cable.'
                    : 'Sin eco. Si los pines 2 y 3 están puenteados, el adaptador o su driver falla.');
-  }catch(e){ log('Error en prueba de eco: '+e.message); try{ await port.close(); }catch(_){} }
+  }catch(e){ try{ await port?.close(); }catch(_){} falloAbrir(e); }
   finally{ ocupado = false; }
 };
 $('btnDes').onclick = desconectar;
