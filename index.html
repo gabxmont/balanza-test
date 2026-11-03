@@ -205,6 +205,7 @@
   </label>
   <button id="btnAuto">Autodetectar baudrate</button>
   <button id="btnSim">Simular lectura</button>
+  <button id="btnEco">Prueba de eco (adaptador)</button>
 </div>
 
 <div class="peso" id="peso">-- kg</div>
@@ -240,6 +241,7 @@ async function conectar(){
   try{
     if(!port) port = await navigator.serial.requestPort();
     await port.open({baudRate:+$('baud').value, dataBits:8, stopBits:1, parity:'none'});
+    try{ await port.setSignals({dataTerminalReady:true, requestToSend:true}); }catch(e){}
     keep = true;
     $('estado').textContent = 'Conectado a '+$('baud').value+' baud 8N1. Pon peso o presiona PRINT.';
     log('Conectado a '+$('baud').value);
@@ -306,6 +308,7 @@ async function probar(baud, ms){
   const datos = [];
   await port.open({baudRate:baud, dataBits:8, stopBits:1, parity:'none'});
   try{
+    try{ await port.setSignals({dataTerminalReady:true, requestToSend:true}); }catch(e){}
     const r = port.readable.getReader();
     const t = setTimeout(()=>r.cancel(), ms);
     try{
@@ -356,6 +359,24 @@ async function autodetectar(){
 
 $('btnCon').onclick = conectar;
 $('btnAuto').onclick = autodetectar;
+$('btnEco').onclick = async () => {
+  if(!('serial' in navigator)){ alert('Usa Chrome o Edge en PC.'); return; }
+  if(ocupado || keep){ log('Desconecta primero y espera a que termine lo demás.'); return; }
+  ocupado = true;
+  try{
+    if(!port) port = await navigator.serial.requestPort();
+    await port.open({baudRate:9600, dataBits:8, stopBits:1, parity:'none'});
+    log('Prueba de eco: debes tener puenteados los pines 2 y 3 del conector DB9 del adaptador (sin la balanza).');
+    const w = port.writable.getWriter(), r = port.readable.getReader(), got = [];
+    const t = setTimeout(()=>r.cancel(), 2500);
+    await w.write(new TextEncoder().encode('ECO123')); w.releaseLock();
+    try{ while(got.length < 6){ const {value, done} = await r.read(); if(done) break; if(value) got.push(...value); } }catch(e){}
+    clearTimeout(t); r.releaseLock(); await port.close();
+    log(got.length ? 'ECO OK: llegó "'+String.fromCharCode(...got)+'". El adaptador y la página funcionan; el problema está en la balanza o en el cable.'
+                   : 'Sin eco. Si los pines 2 y 3 están puenteados, el adaptador o su driver falla.');
+  }catch(e){ log('Error en prueba de eco: '+e.message); try{ await port.close(); }catch(_){} }
+  finally{ ocupado = false; }
+};
 $('btnDes').onclick = desconectar;
 $('btnSim').onclick = () => linea('ST,GS,  '+(Math.random()*50).toFixed(2)+' kg');
 $('btnCopy').onclick = () => { navigator.clipboard.writeText($('log').value); };
